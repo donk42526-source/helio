@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json, logging, os, sys
+import pandas as pd
 from datetime import datetime
 from fetcher import fetch_all
 from reporter import generate_html
