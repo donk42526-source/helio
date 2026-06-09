@@ -9,6 +9,7 @@ def generate_html(data: dict, output_path: str = "output/dashboard.html") -> str
         stocks_js.append({
             "ticker": s.get("ticker"), "sts": s.get("sts",0),
             "level": s.get("level"), "change_pct": s.get("change_pct",0),
+            "close": s.get("close"), "name_cn": s.get("name_cn",""),
             "alerts": s.get("alerts",[]),
             "signals": {"ma": {"score": sigs.get("ma",{}).get("score",0), "detail": sigs.get("ma",{}).get("detail","")},
                         "rsi": {"score": sigs.get("rsi",{}).get("score",0), "value": sigs.get("rsi",{}).get("value","")},

@@ -255,7 +255,7 @@ def detect_signals(mpc,stocks,df_daily):
     bear=sum(1 for s in nonb if s["signals"]["macd"]["score"]<40)
     if bear>=5 and mpc["mpc"]>50:
         qr=df_daily[df_daily["ticker"]=="QQQ"]; qc=float(qr["change_pct"].iloc[0]) if len(qr) else None
-        sigs.append({"type":"sector_alert","count":bear,"qqq_change":qc})
+        sigs.append({"type":"sector_alert","count":bear,"qqq_change":round(qc,2) if qc else None})
     qs=next((s["sts"] for s in stocks if s["ticker"]=="QQQ"),None)
     ss=next((s["sts"] for s in stocks if s["ticker"]=="SPY"),None)
     if qs is not None and ss is not None and qs<40 and ss>55:
@@ -279,7 +279,7 @@ def generate_summary(rd,mpc,stocks,sigs,rec):
     E={"calm":"🟢","moderate":"🟡","elevated":"🟠","high":"🔴","extreme":"⚫"}
     L=[f"📊 **每日美股短线日报 | {rd}**\n",
        f"{E.get(mpc['level'],'⚪')} **市场恐慌度: {mpc['mpc']}/100 ({mpc['level']})**",
-       f"VIX {mpc['components']['vix']['value']} | F&G {mpc['components']['fear_greed']['value']} (恐惧)"]
+       f"VIX {round(mpc['components']['vix']['value'],2)} | F&G {round(mpc['components']['fear_greed']['value'],2)} (恐惧)"]
     if mpc.get("mpc_change") is not None:
         a="↑" if mpc["mpc_change"]>0 else "↓" if mpc["mpc_change"]<0 else "→"
         tag=" ⚡ 恐慌骤变" if abs(mpc["mpc_change"])>15 else (" 情绪稳定" if abs(mpc["mpc_change"])<=8 else "")
