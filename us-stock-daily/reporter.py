@@ -2,6 +2,7 @@ import json, os
 from jinja2 import Environment, FileSystemLoader
 TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 _jinja = Environment(loader=FileSystemLoader(TEMPLATE_DIR))
+_jinja.globals['level_cn'] = {"strong":"强势","bullish":"偏多","neutral":"中性","weak":"弱势","bearish":"偏空","calm":"平静","moderate":"适度","elevated":"升温","high":"偏高","extreme":"极端"}
 def generate_html(data: dict, output_path: str = "output/dashboard.html") -> str:
     stocks_js = []
     for s in data.get("stocks", []):
