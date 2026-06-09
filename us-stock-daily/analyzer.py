@@ -101,9 +101,11 @@ def compute_sts_one(t,c,ma20,ma50,vol,avol,chg,hist,target_price=None,recommenda
     vw=sum(w for k,w in WEIGHTS.items() if not pd.isna(sc[k]))
     sts=sum(sc[k]*WEIGHTS[k]/vw for k in WEIGHTS if not pd.isna(sc[k])) if vw else 50; sts=round(sts,1)
     lv="strong" if sts>=70 else "bullish" if sts>=55 else "neutral" if sts>=40 else "weak" if sts>=25 else "bearish"
-    signals_out={"ma":{"score":sc["ma"],"detail":md},"rsi":{"score":sc["rsi"],"value":round(rv2,1) if rv2 else None},
-                 "macd":{"score":sc["macd"],"detail":mcd},"volume":{"score":sc["volume"],"detail":vd},
-                 "bollinger":{"score":sc["bollinger"],"detail":bd}}
+    signals_out={"ma":{"score":sc["ma"],"detail":md,"ma20":round(ma20,2) if not pd.isna(ma20) else None,"ma50":round(ma50,2) if not pd.isna(ma50) else None},
+                 "rsi":{"score":sc["rsi"],"value":round(rv2,1) if rv2 else None,"raw":round(rv,1) if not pd.isna(rv) else None},
+                 "macd":{"score":sc["macd"],"detail":mcd,"line":round(ml,4) if not pd.isna(ml) else None,"signal":round(ms,4) if not pd.isna(ms) else None,"histogram":round(mh,4) if not pd.isna(mh) else None},
+                 "volume":{"score":sc["volume"],"detail":vd,"raw":int(vol),"avg_20d":int(avol)},
+                 "bollinger":{"score":sc["bollinger"],"detail":bd,"upper":round(bu,2) if not pd.isna(bu) else None,"lower":round(bl,2) if not pd.isna(bl) else None,"mid":round(bm,2) if not pd.isna(bm) else None,"bandwidth":round(bw,4) if not pd.isna(bw) else None}}
     bias=compute_bias(signals_out)
     rs={"rs_5d":None,"rs_20d":None,"vs_qqq":None}
     analyst=score_target_price(c,target_price,recommendation)
@@ -229,6 +231,16 @@ def generate_summary(rd,mpc,stocks,sigs,rec):
     L.append("📋 **逐标的方向研判:**")
     for s in sb_sorted:
         L.append(generate_ticker_analysis(s))
+        sig=s["signals"]; rsi_v=sig["rsi"].get("raw")
+        macd_l=sig["macd"].get("line"); macd_h=sig["macd"].get("histogram")
+        bb_w=sig["bollinger"].get("bandwidth"); bb_u=sig["bollinger"].get("upper"); bb_l=sig["bollinger"].get("lower")
+        ma20=sig["ma"].get("ma20"); ma50=sig["ma"].get("ma50")
+        raw_parts=[]
+        if rsi_v is not None: raw_parts.append(f"RSI {rsi_v}")
+        if macd_l is not None: raw_parts.append(f"MACD {macd_l:.3f} (柱{macd_h:+.4f})" if macd_h else f"MACD {macd_l:.3f}")
+        if bb_w is not None: raw_parts.append(f"布林带宽 {bb_w:.4f}")
+        if ma20 and ma50: raw_parts.append(f"MA20 {ma20:.1f}/MA50 {ma50:.1f}")
+        if raw_parts: L.append(f"  `{' | '.join(raw_parts)}`")
     L.append(f"\n⛔ **建议:** {rec}")
     return "\n".join(L)
 
