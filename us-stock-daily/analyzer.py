@@ -2,6 +2,8 @@
 import numpy as np, pandas as pd
 from typing import Optional, Tuple
 from datetime import date
+try: from config import TICKER_NAMES
+except: TICKER_NAMES = {}
 
 def vix_to_score(vix): return 0 if vix<13 else 15 if vix<17 else 30 if vix<20 else 50 if vix<25 else 70 if vix<30 else 85 if vix<35 else 100
 
@@ -311,6 +313,8 @@ def run_analysis(df_daily, df_history, vix, fng, prev_mpc=None):
             rs5=round((row["close"]/hist[-5]-1)*100-(qqq_close/qqq_hist[-5]-1)*100,2)
             s["relative_strength"]["rs_5d"]=rs5
             s["relative_strength"]["vs_qqq"]="outperform" if rs5>2 else "underperform" if rs5<-2 else "in_line"
+        s["name_cn"] = TICKER_NAMES.get(t, "")
+        s["explanation"] = generate_plain_explanation(s, mpc)
         stocks.append(s)
     sigs=detect_signals(mpc,stocks,df_daily); rec=recommend(mpc,sigs)
     today_str=date.today().isoformat(); summary=generate_summary(today_str,mpc,stocks,sigs,rec)

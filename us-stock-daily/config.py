@@ -1,4 +1,5 @@
 TICKERS = ["NVDA","AMD","AVGO","TSM","MU","ASML","SMCI","MSFT","SPY","QQQ"]
+TICKER_NAMES = {"NVDA":"英伟达","AMD":"超威半导体","AVGO":"博通","TSM":"台积电","MU":"美光","ASML":"阿斯麦","SMCI":"超微电脑","MSFT":"微软","SPY":"标普500ETF","QQQ":"纳斯达克100ETF"}
 MPC_VIX_WEIGHT = 0.55
 MPC_FNG_WEIGHT = 0.45
 STS_WEIGHTS = {"ma":0.30,"rsi":0.25,"macd":0.20,"volume":0.15,"bollinger":0.10}
