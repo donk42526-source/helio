@@ -3,6 +3,15 @@ import json, logging, os, sys
 from datetime import datetime
 from fetcher import fetch_all
 from reporter import generate_html
+
+class RoundFloatEncoder(json.JSONEncoder):
+    def encode(self, o):
+        return super().encode(self._round(o))
+    def _round(self, obj):
+        if isinstance(obj, float): return round(obj, 2)
+        if isinstance(obj, dict): return {k: self._round(v) for k,v in obj.items()}
+        if isinstance(obj, list): return [self._round(i) for i in obj]
+        return obj
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger("daily")
 def _load_prev_mpc():
@@ -21,16 +30,18 @@ def run():
     from analyzer import run_analysis
     prev = _load_prev_mpc()
     result = run_analysis(df, hist, vix, fng, prev, news_dict)
-    # merge change_pct from fetcher into stocks
+    # merge change_pct from fetcher into stocks, sort QQQ/SPY first
     for s in result.get("stocks",[]):
         row = df[df["ticker"]==s["ticker"]]
         if len(row): s["change_pct"] = float(row["change_pct"].iloc[0])
+    result["stocks"] = sorted(result.get("stocks",[]),
+        key=lambda s: (0 if s["ticker"]=="QQQ" else 1 if s["ticker"]=="SPY" else 2, -s.get("sts",0)))
     logger.info("Step 3/4: 生成报告...")
     print(result.get("summary_markdown",""))
     os.makedirs("output", exist_ok=True)
     html_path = generate_html(result)
     logger.info(f"Dashboard: {html_path}")
-    with open("output/result.json","w") as f: json.dump(result, f, ensure_ascii=False, indent=2)
+    with open("output/result.json","w") as f: json.dump(result, f, ensure_ascii=False, indent=2, cls=RoundFloatEncoder)
     logger.info("Step 4/4: 完成 ✅")
     return result
 if __name__ == "__main__": run()

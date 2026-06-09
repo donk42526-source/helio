@@ -12,8 +12,8 @@ def compute_mpc(vix, fng, prev_mpc=None):
     vs, fs = vix_to_score(vix), 100-fng; mpc = round(0.55*vs+0.45*fs,1)
     level = "calm" if mpc<25 else "moderate" if mpc<45 else "elevated" if mpc<65 else "high" if mpc<80 else "extreme"
     chg = round(mpc-prev_mpc,1) if prev_mpc is not None else None
-    return {"mpc":mpc,"level":level,"mpc_change":chg,
-            "components":{"vix":{"value":vix,"score":vs},"fear_greed":{"value":fng,"score":fs}}}
+    return {"mpc":mpc,"level":level,"mpc_change":round(chg,1) if chg else None,
+            "components":{"vix":{"value":round(vix,2),"score":vs},"fear_greed":{"value":round(fng,2),"score":fs}}}
 
 def compute_rsi(closes, period=14):
     if len(closes)<period+1: return np.nan
