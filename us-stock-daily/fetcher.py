@@ -17,12 +17,17 @@ def fetch_stock(ticker):
         l, p = h.iloc[-1], h.iloc[-2] if len(h)>=2 else h.iloc[-1]
         ma20 = h["Close"].rolling(20).mean().iloc[-1]
         ma50 = h["Close"].rolling(50).mean().iloc[-1]
+        info = {}
+        try: info = s.info
+        except: pass
         return {"ticker":ticker,"close":float(l["Close"]),"open":float(l["Open"]),
                 "high":float(l["High"]),"low":float(l["Low"]),"volume":int(l["Volume"]),
                 "ma20":float(ma20) if pd.notna(ma20) else None,
                 "ma50":float(ma50) if pd.notna(ma50) else None,
                 "prev_close":float(p["Close"]),
-                "change_pct":float((l["Close"]-p["Close"])/p["Close"]*100)}
+                "change_pct":float((l["Close"]-p["Close"])/p["Close"]*100),
+                "target_price":info.get("targetMeanPrice"),
+                "recommendation":info.get("recommendationKey")}
     return _retry(_f, ticker)
 def fetch_vix():
     return _retry(lambda: float(yf.Ticker(YFINANCE_VIX_TICKER).history(period="5d").iloc[-1]["Close"]), "VIX")
