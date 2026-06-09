@@ -6,6 +6,7 @@ from datetime import date
 def vix_to_score(vix): return 0 if vix<13 else 15 if vix<17 else 30 if vix<20 else 50 if vix<25 else 70 if vix<30 else 85 if vix<35 else 100
 
 def compute_mpc(vix, fng, prev_mpc=None):
+    if fng is None: fng = max(0, 100 - vix*3)  # fallback: VIX越高F&G越低
     vs, fs = vix_to_score(vix), 100-fng; mpc = round(0.55*vs+0.45*fs,1)
     level = "calm" if mpc<25 else "moderate" if mpc<45 else "elevated" if mpc<65 else "high" if mpc<80 else "extreme"
     chg = round(mpc-prev_mpc,1) if prev_mpc is not None else None
