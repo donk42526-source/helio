@@ -112,7 +112,9 @@ def compute_sts_one(t,c,ma20,ma50,vol,avol,chg,hist,target_price=None,recommenda
     rs={"rs_5d":None,"rs_20d":None,"vs_qqq":None}
     analyst=score_target_price(c,target_price,recommendation)
     return {"ticker":t,"sts":sts,"level":lv,"signals":signals_out,"bias":bias,
-            "relative_strength":rs,"analyst":analyst,"alerts":[]}
+            "relative_strength":rs,"analyst":analyst,"alerts":[],
+            "close":c,"ma20_v":ma20 if not pd.isna(ma20) else None,"ma50_v":ma50 if not pd.isna(ma50) else None,
+            "bb_upper":bu if not pd.isna(bu) else None,"bb_lower":bl if not pd.isna(bl) else None}
 
 def compute_bias(signals):
     votes={"bull":0,"bear":0}
@@ -164,32 +166,36 @@ def generate_ticker_analysis(stock):
     if nt: parts.append("\n"+nt)
     return f"**{t}** (STS {sts}): "+"".join(parts)
 
-def generate_prediction(stock, mpc=None):
-    """短线预测，基于技术+情绪+基本面综合"""
-    t,b=stock["ticker"],stock.get("bias",{}); d=b.get("direction","neutral")
-    c=b.get("confidence","medium"); sts=stock["sts"]
-    rs=stock.get("relative_strength",{}); a=stock.get("analyst",{})
-    up=a.get("upside_pct")
-    news=stock.get("news",[])
-    # count news sentiment
-    from collections import Counter
-    ns=Counter(classify_news_sentiment(n["title"],n.get("summary","")) for n in (news or []))
-    # prediction logic
-    if d=="bullish" and c=="high":
-        if ns.get("bullish",0)>ns.get("bearish",0): return "🔥 技术面+消息面共振看多，短期上涨概率高，关注成交量是否持续放大"
-        return "📈 技术面看多但消息面中性，大概率震荡上行，关注压力位突破"
-    elif d=="bullish":
-        if ns.get("bearish",0)>0: return "📈 技术面偏多但有利空消息，短期可能先回调再上攻，等利空消化"
-        return "📈 技术面偏多但信号有分歧，维持谨慎看多，仓位不宜过重"
-    elif d=="bearish" and c=="high":
-        if ns.get("bearish",0)>ns.get("bullish",0): return "⚠️ 技术面+消息面共振看空，短期下跌压力大，不建议抄底"
-        if up and up>20: return "⚠️ 技术面看空但基本面低估，可能震荡筑底，等待MACD金叉信号再入场"
-        return "⚠️ 多项指标看空，短期大概率继续走弱，场外观望"
-    elif d=="bearish":
-        return "📉 技术面偏空，短期趋势向下，可在支撑位附近观察是否企稳"
-    else:
-        if up and up>20: return "⚪ 方向不明但基本面低估，可能在当前位置盘整，变盘节点临近"
-        return "⚪ 信号有分歧方向不明朗，短期大概率横盘整理，等待突破信号"
+def generate_prediction(stock):
+    """基于现有信号生成短线预测文字"""
+    t=stock["ticker"]; sigs=stock["signals"]; bias=stock.get("bias",{})
+    analyst=stock.get("analyst",{}); close=stock.get("close",0)
+    lines=[f"🔮 **{t} 短线预测：**"]
+    d=bias.get("direction","neutral"); c=bias.get("confidence","medium")
+    rsi_v=sigs["rsi"].get("value"); macd_d=sigs["macd"]["detail"]
+    if d=="bullish" and c=="high": lines.append("  • 方向：短期偏多，多头排列+MACD金叉确认，未来1-3日大概率延续强势")
+    elif d=="bullish": lines.append("  • 方向：倾向看多但信号有分歧，若能放量突破前高则确认，否则可能震荡")
+    elif d=="bearish" and c=="high": lines.append("  • 方向：短期偏空，MACD死叉，未来1-3日可能继续承压，不宜追低")
+    elif d=="bearish": lines.append("  • 方向：偏弱但非极端，若RSI触及超卖或有短线反弹，但趋势未转前不宜重仓")
+    else: lines.append("  • 方向：短期方向不明，多空力量均衡，可能在当前价位附近震荡整理")
+    ma20=stock.get("ma20_v",0); ma50=stock.get("ma50_v",0)
+    bu=stock.get("bb_upper",0); bl=stock.get("bb_lower",0)
+    if ma20 and ma50:
+        if close>ma20: sup,res=f"${ma20:.2f}(MA20)",f"${bu:.2f}(布林上轨)" if bu else "前高"
+        elif close>ma50: sup,res=f"${ma50:.2f}(MA50)",f"${ma20:.2f}(MA20)"
+        else: sup,res=f"${bl:.2f}(布林下轨)" if bl else "前低",f"${ma50:.2f}(MA50)"
+        lines.append(f"  • 关键位：支撑 {sup}，阻力 {res}")
+    if d=="bearish": lines.append("  • 反转条件：RSI回升至45以上+MACD出现金叉，则偏空转偏多")
+    elif d=="bullish": lines.append("  • 反转条件：MACD出现死叉或跌破MA20，则偏多转偏空")
+    else: lines.append("  • 突破信号：放量突破布林上轨则看多，跌破MA50则看空")
+    up=analyst.get("upside_pct")
+    if up is not None:
+        if up>20 and d=="bearish": lines.append(f"  • ⚠️ 注意：分析师目标价上行{up:+.1f}%，技术面弱但基本面强——大跌可能是中长线买入机会")
+        elif up>20 and d=="bullish": lines.append(f"  • ✅ 技术面+基本面共振：分析师目标价上行{up:+.1f}%，双重确认看多")
+    if rsi_v is not None:
+        if rsi_v>70: lines.append(f"  • ⚠️ RSI超买({rsi_v:.1f})，短期可能技术性回调，追高需谨慎")
+        elif rsi_v<30: lines.append(f"  • ⚡ RSI超卖({rsi_v:.1f})，恐慌抛售往往不可持续，关注企稳反弹信号")
+    return "\n".join(lines)
     """通俗白话解释，给不懂金融的人看"""
     t=stock["ticker"]; sigs=stock["signals"]; bias=stock.get("bias",{})
     rs=stock.get("relative_strength",{}); analyst=stock.get("analyst",{})
@@ -307,7 +313,7 @@ def generate_summary(rd,mpc,stocks,sigs,rec):
     L.append("📋 **逐标的方向研判:**")
     for s in sb_sorted:
         L.append(generate_ticker_analysis(s))
-        L.append(f"  🔮 **预测:** {generate_prediction(s, mpc)}")
+        L.append(generate_prediction(s))
         sig=s["signals"]; rsi_v=sig["rsi"].get("raw")
         macd_l=sig["macd"].get("line"); macd_h=sig["macd"].get("histogram")
         bb_w=sig["bollinger"].get("bandwidth"); bb_u=sig["bollinger"].get("upper"); bb_l=sig["bollinger"].get("lower")
