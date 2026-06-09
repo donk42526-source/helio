@@ -164,7 +164,32 @@ def generate_ticker_analysis(stock):
     if nt: parts.append("\n"+nt)
     return f"**{t}** (STS {sts}): "+"".join(parts)
 
-def generate_plain_explanation(stock, mpc=None):
+def generate_prediction(stock, mpc=None):
+    """短线预测，基于技术+情绪+基本面综合"""
+    t,b=stock["ticker"],stock.get("bias",{}); d=b.get("direction","neutral")
+    c=b.get("confidence","medium"); sts=stock["sts"]
+    rs=stock.get("relative_strength",{}); a=stock.get("analyst",{})
+    up=a.get("upside_pct")
+    news=stock.get("news",[])
+    # count news sentiment
+    from collections import Counter
+    ns=Counter(classify_news_sentiment(n["title"],n.get("summary","")) for n in (news or []))
+    # prediction logic
+    if d=="bullish" and c=="high":
+        if ns.get("bullish",0)>ns.get("bearish",0): return "🔥 技术面+消息面共振看多，短期上涨概率高，关注成交量是否持续放大"
+        return "📈 技术面看多但消息面中性，大概率震荡上行，关注压力位突破"
+    elif d=="bullish":
+        if ns.get("bearish",0)>0: return "📈 技术面偏多但有利空消息，短期可能先回调再上攻，等利空消化"
+        return "📈 技术面偏多但信号有分歧，维持谨慎看多，仓位不宜过重"
+    elif d=="bearish" and c=="high":
+        if ns.get("bearish",0)>ns.get("bullish",0): return "⚠️ 技术面+消息面共振看空，短期下跌压力大，不建议抄底"
+        if up and up>20: return "⚠️ 技术面看空但基本面低估，可能震荡筑底，等待MACD金叉信号再入场"
+        return "⚠️ 多项指标看空，短期大概率继续走弱，场外观望"
+    elif d=="bearish":
+        return "📉 技术面偏空，短期趋势向下，可在支撑位附近观察是否企稳"
+    else:
+        if up and up>20: return "⚪ 方向不明但基本面低估，可能在当前位置盘整，变盘节点临近"
+        return "⚪ 信号有分歧方向不明朗，短期大概率横盘整理，等待突破信号"
     """通俗白话解释，给不懂金融的人看"""
     t=stock["ticker"]; sigs=stock["signals"]; bias=stock.get("bias",{})
     rs=stock.get("relative_strength",{}); analyst=stock.get("analyst",{})
@@ -282,6 +307,7 @@ def generate_summary(rd,mpc,stocks,sigs,rec):
     L.append("📋 **逐标的方向研判:**")
     for s in sb_sorted:
         L.append(generate_ticker_analysis(s))
+        L.append(f"  🔮 **预测:** {generate_prediction(s, mpc)}")
         sig=s["signals"]; rsi_v=sig["rsi"].get("raw")
         macd_l=sig["macd"].get("line"); macd_h=sig["macd"].get("histogram")
         bb_w=sig["bollinger"].get("bandwidth"); bb_u=sig["bollinger"].get("upper"); bb_l=sig["bollinger"].get("lower")
