@@ -160,6 +160,47 @@ def generate_ticker_analysis(stock):
     if up is not None: parts.append(f"，目标价上行{up:+.1f}%")
     return f"**{t}** (STS {sts}): "+"".join(parts)
 
+def generate_plain_explanation(stock):
+    """通俗白话解释，给不懂金融的人看"""
+    t,sts,b=stock["ticker"],stock["sts"],stock.get("bias",{})
+    sig=stock["signals"]; rs=stock.get("relative_strength",{})
+    a=stock.get("analyst",{})
+    lines=[]
+    # RSI
+    rsi=sig["rsi"].get("raw")
+    if rsi is not None:
+        if rsi>70: lines.append(f"RSI={rsi}，处于超买区，短期可能涨过头了有回调风险")
+        elif rsi<35: lines.append(f"RSI={rsi}，处于超卖区，市场恐慌抛售中，可能被错杀")
+        elif 55<=rsi<=65: lines.append(f"RSI={rsi}，动能健康，处于上升通道")
+        else: lines.append(f"RSI={rsi}，中性区间，无明显方向")
+    # MACD
+    macd_d=sig["macd"]["detail"]
+    macd_l=sig["macd"].get("line"); macd_h=sig["macd"].get("histogram")
+    if macd_l is not None:
+        if "金叉" in macd_d: lines.append(f"MACD金叉（短期均线上穿长期均线），买入信号，上涨动能增强")
+        elif "死叉" in macd_d: lines.append(f"MACD死叉（短期均线下穿长期均线），卖出信号，下跌压力加大")
+        elif macd_h and macd_h<0: lines.append(f"MACD动能减弱，柱状图缩小，趋势可能反转")
+    # MA
+    ma_d=sig["ma"]["detail"]
+    if "MA20>MA50" in ma_d: lines.append("价格在20日和50日均线之上，处于多头趋势，短期强于中长期")
+    elif "空头" in ma_d: lines.append("价格跌破均线，处于空头趋势，卖压较重")
+    # Bollinger
+    bb_w=sig["bollinger"].get("bandwidth")
+    if bb_w is not None:
+        if bb_w>0.3: lines.append(f"布林带宽={bb_w:.3f}，波动大，容易出现短线机会但也伴随高风险")
+        elif bb_w<0.1: lines.append(f"布林带宽={bb_w:.3f}，波动收窄，可能即将变盘")
+    # Bias summary
+    d,c=b.get("direction","neutral"),b.get("confidence","medium")
+    if d=="bullish" and c=="high": lines.append("综合来看，多项指标一致看多，短线胜率较高")
+    elif d=="bearish" and c=="high": lines.append("综合来看，多项指标一致看空，短线风险较大")
+    elif d=="neutral": lines.append("综合来看，信号有分歧，方向不明确，建议观望")
+    # Target
+    up=a.get("upside_pct")
+    if up is not None:
+        if up>20: lines.append(f"分析师目标价高出当前{up:.0f}%，机构认为长期有较大上涨空间")
+        elif up<-10: lines.append(f"分析师目标价低于当前{abs(up):.0f}%，机构认为当前估值偏高")
+    return "  💬 ".join(lines)
+
 def detect_signals(mpc,stocks,df_daily):
     sigs=[]; nonb=[s for s in stocks if s["ticker"] not in ("SPY","QQQ")]; mc=mpc.get("mpc_change")
     if mc and mc>15:
@@ -241,6 +282,7 @@ def generate_summary(rd,mpc,stocks,sigs,rec):
         if bb_w is not None: raw_parts.append(f"布林带宽 {bb_w:.4f}")
         if ma20 and ma50: raw_parts.append(f"MA20 {ma20:.1f}/MA50 {ma50:.1f}")
         if raw_parts: L.append(f"  `{' | '.join(raw_parts)}`")
+        L.append(f"  💬 {generate_plain_explanation(s)}")
     L.append(f"\n⛔ **建议:** {rec}")
     return "\n".join(L)
 
