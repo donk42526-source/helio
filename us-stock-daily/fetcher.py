@@ -27,7 +27,8 @@ def fetch_stock(ticker):
                 "prev_close":float(p["Close"]),
                 "change_pct":float((l["Close"]-p["Close"])/p["Close"]*100),
                 "target_price":info.get("targetMeanPrice"),
-                "recommendation":info.get("recommendationKey")}
+                "recommendation":info.get("recommendationKey"),
+                "market_cap":info.get("marketCap")}
     return _retry(_f, ticker)
 def fetch_vix():
     return _retry(lambda: float(yf.Ticker(YFINANCE_VIX_TICKER).history(period="5d").iloc[-1]["Close"]), "VIX")

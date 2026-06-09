@@ -33,7 +33,13 @@ def run():
     # merge change_pct from fetcher into stocks, sort QQQ/SPY first
     for s in result.get("stocks",[]):
         row = df[df["ticker"]==s["ticker"]]
-        if len(row): s["change_pct"] = float(row["change_pct"].iloc[0])
+        if len(row):
+            s["change_pct"] = float(row["change_pct"].iloc[0])
+            mc = row["market_cap"].iloc[0] if "market_cap" in row.columns else None
+            if mc and not pd.isna(mc):
+                if mc >= 1e12: s["market_cap_fmt"] = f"{mc/1e12:.1f}万亿"
+                elif mc >= 1e8: s["market_cap_fmt"] = f"{mc/1e8:.0f}亿"
+                else: s["market_cap_fmt"] = f"${mc:,.0f}"
     result["stocks"] = sorted(result.get("stocks",[]),
         key=lambda s: (0 if s["ticker"]=="QQQ" else 1 if s["ticker"]=="SPY" else 2, -s.get("sts",0)))
     logger.info("Step 3/4: 生成报告...")
