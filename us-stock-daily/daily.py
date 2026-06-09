@@ -13,14 +13,14 @@ def run():
     logger.info("=== 美股短线分析日报 ===")
     today = datetime.now().strftime("%Y-%m-%d")
     logger.info("Step 1/4: 拉取数据...")
-    df, hist, vix, fng, failed = fetch_all()
+    df, hist, vix, fng, failed, news_dict = fetch_all()
     if df.empty: print("❌ 今日数据不可用", file=sys.stderr); sys.exit(1)
     if failed: logger.warning(f"部分缺失: {failed}")
     logger.info(f"拉取完成: {len(df)}标的, VIX={vix}, F&G={fng}")
     logger.info("Step 2/4: 计算指标...")
     from analyzer import run_analysis
     prev = _load_prev_mpc()
-    result = run_analysis(df, hist, vix, fng, prev)
+    result = run_analysis(df, hist, vix, fng, prev, news_dict)
     # merge change_pct from fetcher into stocks
     for s in result.get("stocks",[]):
         row = df[df["ticker"]==s["ticker"]]

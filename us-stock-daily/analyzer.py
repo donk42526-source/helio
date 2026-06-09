@@ -160,6 +160,8 @@ def generate_ticker_analysis(stock):
         elif vs=="underperform": parts.append(f"，跑输QQQ {rs5:+.1f}%")
     up=a.get("upside_pct")
     if up is not None: parts.append(f"，目标价上行{up:+.1f}%")
+    nt = stock.get("news_text","")
+    if nt: parts.append("\n"+nt)
     return f"**{t}** (STS {sts}): "+"".join(parts)
 
 def generate_plain_explanation(stock, mpc=None):
@@ -294,7 +296,28 @@ def generate_summary(rd,mpc,stocks,sigs,rec):
     L.append(f"\n⛔ **建议:** {rec}")
     return "\n".join(L)
 
-def run_analysis(df_daily, df_history, vix, fng, prev_mpc=None):
+BULLISH_WORDS = ["beat","surge","rally","upgrade","buy","outperform","raise","bull","jump","soar","record","growth","gain","boost","breakthrough","approval","launch","partnership","upside","beat expectations","raised guidance","strong demand"]
+BEARISH_WORDS = ["fall","drop","miss","downgrade","sell","cut","bear","plunge","tumble","decline","loss","risk","warn","probe","investigation","lawsuit","delay","sanction","tariff","ban","recall","layoff","crash","concern","missed estimates","lowered guidance","weak demand"]
+
+def classify_news_sentiment(title, summary=""):
+    text = (title+" "+(summary or "")).lower()
+    bh = sum(1 for w in BULLISH_WORDS if w in text)
+    br = sum(1 for w in BEARISH_WORDS if w in text)
+    if bh>br: return "bullish"
+    elif br>bh: return "bearish"
+    return "neutral"
+
+def generate_news_summary(stock_news):
+    if not stock_news: return ""
+    lines=["📰 **最新消息:**"]
+    for n in stock_news[:3]:
+        s=classify_news_sentiment(n["title"],n.get("summary",""))
+        icon={"bullish":"🐂 利好","bearish":"🐻 利空","neutral":"⚪"}[s]
+        title=n["title"][:80]+("..." if len(n["title"])>80 else "")
+        lines.append(f"  {icon} {title} ({n.get('source','')})")
+    return "\n".join(lines)
+
+def run_analysis(df_daily, df_history, vix, fng, prev_mpc=None, news_dict=None):
     if "avg_volume" not in df_daily.columns:
         df_daily=df_daily.copy(); df_daily["avg_volume"]=df_daily["volume"]
     mpc=compute_mpc(vix,fng,prev_mpc)
@@ -314,6 +337,8 @@ def run_analysis(df_daily, df_history, vix, fng, prev_mpc=None):
             s["relative_strength"]["rs_5d"]=rs5
             s["relative_strength"]["vs_qqq"]="outperform" if rs5>2 else "underperform" if rs5<-2 else "in_line"
         s["name_cn"] = TICKER_NAMES.get(t, "")
+        if news_dict and t in news_dict: s["news"] = news_dict[t]
+        s["news_text"] = generate_news_summary(s.get("news",[]))
         s["explanation"] = generate_plain_explanation(s, mpc)
         stocks.append(s)
     sigs=detect_signals(mpc,stocks,df_daily); rec=recommend(mpc,sigs)

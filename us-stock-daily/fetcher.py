@@ -47,6 +47,16 @@ def fetch_history(ticker, days=30):
         if h.empty or len(h)<5: raise ValueError("insufficient history")
         c = h["Close"].tail(days); c.index = c.index.strftime("%Y-%m-%d"); return c
     return _retry(_f, f"{ticker}_hist")
+def fetch_news(ticker, limit=5):
+    try:
+        t = yf.Ticker(ticker)
+        return [{"title": n["content"]["title"],
+                 "summary": n["content"].get("summary",""),
+                 "source": n["content"]["provider"]["displayName"],
+                 "url": n["content"]["clickThroughUrl"]["url"]}
+                for n in (t.news or [])[:limit]]
+    except: return []
+
 def fetch_all():
     rows, failed = [], []
     for t in TICKERS:
@@ -55,4 +65,8 @@ def fetch_all():
     hists = {t: s for t in TICKERS if (s:=fetch_history(t)) is not None}
     hist_df = pd.DataFrame(hists) if hists else pd.DataFrame()
     if not hist_df.empty: hist_df.index.name = "date"
-    return df, hist_df, fetch_vix(), fetch_fear_greed(), failed
+    news_dict = {}
+    for t in TICKERS:
+        n = fetch_news(t)
+        if n: news_dict[t] = n
+    return df, hist_df, fetch_vix(), fetch_fear_greed(), failed, news_dict
