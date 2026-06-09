@@ -96,15 +96,15 @@ WEIGHTS={"ma":0.30,"rsi":0.25,"macd":0.20,"volume":0.15,"bollinger":0.10}
 def compute_sts_one(t,c,ma20,ma50,vol,avol,chg,hist):
     rv=compute_rsi(hist); ml,ms,mh,mph=compute_macd(hist); bm,bu,bl,bw,bpw=compute_bollinger(hist)
     sc={}; sc["ma"],md=score_ma(c,ma20,ma50); sc["rsi"],rv2=score_rsi(rv)
-    sc["macd"],mcd=score_macd(ml,ms,mh,mph); sc["vol"],vd=score_volume(vol,avol,chg)
-    sc["bb"],bd=score_bollinger(c,bu,bl,bm,bw,bpw)
+    sc["macd"],mcd=score_macd(ml,ms,mh,mph); sc["volume"],vd=score_volume(vol,avol,chg)
+    sc["bollinger"],bd=score_bollinger(c,bu,bl,bm,bw,bpw)
     vw=sum(w for k,w in WEIGHTS.items() if not pd.isna(sc[k]))
     sts=sum(sc[k]*WEIGHTS[k]/vw for k in WEIGHTS if not pd.isna(sc[k])) if vw else 50; sts=round(sts,1)
     lv="strong" if sts>=70 else "bullish" if sts>=55 else "neutral" if sts>=40 else "weak" if sts>=25 else "bearish"
     return {"ticker":t,"sts":sts,"level":lv,
             "signals":{"ma":{"score":sc["ma"],"detail":md},"rsi":{"score":sc["rsi"],"value":round(rv2,1) if rv2 else None},
-                       "macd":{"score":sc["macd"],"detail":mcd},"volume":{"score":sc["vol"],"detail":vd},
-                       "bollinger":{"score":sc["bb"],"detail":bd}},"alerts":[]}
+                       "macd":{"score":sc["macd"],"detail":mcd},"volume":{"score":sc["volume"],"detail":vd},
+                       "bollinger":{"score":sc["bollinger"],"detail":bd}},"alerts":[]}
 
 def detect_signals(mpc,stocks,df_daily):
     sigs=[]; nonb=[s for s in stocks if s["ticker"] not in ("SPY","QQQ")]; mc=mpc.get("mpc_change")

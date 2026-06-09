@@ -21,6 +21,10 @@ def run():
     from analyzer import run_analysis
     prev = _load_prev_mpc()
     result = run_analysis(df, hist, vix, fng, prev)
+    # merge change_pct from fetcher into stocks
+    for s in result.get("stocks",[]):
+        row = df[df["ticker"]==s["ticker"]]
+        if len(row): s["change_pct"] = float(row["change_pct"].iloc[0])
     logger.info("Step 3/4: 生成报告...")
     print(result.get("summary_markdown",""))
     os.makedirs("output", exist_ok=True)
