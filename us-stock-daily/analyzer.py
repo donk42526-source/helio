@@ -160,46 +160,52 @@ def generate_ticker_analysis(stock):
     if up is not None: parts.append(f"，目标价上行{up:+.1f}%")
     return f"**{t}** (STS {sts}): "+"".join(parts)
 
-def generate_plain_explanation(stock):
+def generate_plain_explanation(stock, mpc=None):
     """通俗白话解释，给不懂金融的人看"""
-    t,sts,b=stock["ticker"],stock["sts"],stock.get("bias",{})
-    sig=stock["signals"]; rs=stock.get("relative_strength",{})
-    a=stock.get("analyst",{})
-    lines=[]
-    # RSI
-    rsi=sig["rsi"].get("raw")
-    if rsi is not None:
-        if rsi>70: lines.append(f"RSI={rsi}，处于超买区，短期可能涨过头了有回调风险")
-        elif rsi<35: lines.append(f"RSI={rsi}，处于超卖区，市场恐慌抛售中，可能被错杀")
-        elif 55<=rsi<=65: lines.append(f"RSI={rsi}，动能健康，处于上升通道")
-        else: lines.append(f"RSI={rsi}，中性区间，无明显方向")
-    # MACD
-    macd_d=sig["macd"]["detail"]
-    macd_l=sig["macd"].get("line"); macd_h=sig["macd"].get("histogram")
-    if macd_l is not None:
-        if "金叉" in macd_d: lines.append(f"MACD金叉（短期均线上穿长期均线），买入信号，上涨动能增强")
-        elif "死叉" in macd_d: lines.append(f"MACD死叉（短期均线下穿长期均线），卖出信号，下跌压力加大")
-        elif macd_h and macd_h<0: lines.append(f"MACD动能减弱，柱状图缩小，趋势可能反转")
-    # MA
-    ma_d=sig["ma"]["detail"]
-    if "MA20>MA50" in ma_d: lines.append("价格在20日和50日均线之上，处于多头趋势，短期强于中长期")
-    elif "空头" in ma_d: lines.append("价格跌破均线，处于空头趋势，卖压较重")
-    # Bollinger
-    bb_w=sig["bollinger"].get("bandwidth")
-    if bb_w is not None:
-        if bb_w>0.3: lines.append(f"布林带宽={bb_w:.3f}，波动大，容易出现短线机会但也伴随高风险")
-        elif bb_w<0.1: lines.append(f"布林带宽={bb_w:.3f}，波动收窄，可能即将变盘")
-    # Bias summary
-    d,c=b.get("direction","neutral"),b.get("confidence","medium")
-    if d=="bullish" and c=="high": lines.append("综合来看，多项指标一致看多，短线胜率较高")
-    elif d=="bearish" and c=="high": lines.append("综合来看，多项指标一致看空，短线风险较大")
-    elif d=="neutral": lines.append("综合来看，信号有分歧，方向不明确，建议观望")
-    # Target
-    up=a.get("upside_pct")
+    t=stock["ticker"]; sigs=stock["signals"]; bias=stock.get("bias",{})
+    rs=stock.get("relative_strength",{}); analyst=stock.get("analyst",{})
+    lines=[f"💬 **{t} 通俗解读：**"]
+    rsi_v=sigs["rsi"].get("value")
+    if rsi_v is not None:
+        if rsi_v>70: lines.append(f"  • RSI {rsi_v} — 处于超买区，最近涨太猛了，像抢购潮，短期可能要回调")
+        elif rsi_v>60: lines.append(f"  • RSI {rsi_v} — 偏强势，买盘活跃但还没到过热")
+        elif rsi_v>40: lines.append(f"  • RSI {rsi_v} — 中性区间，买卖力量均衡")
+        elif rsi_v>30: lines.append(f"  • RSI {rsi_v} — 偏弱势，接近超卖区，像打折甩卖中")
+        else: lines.append(f"  • RSI {rsi_v} — 处于超卖区，恐慌抛售中，但往往是短线反弹的前兆")
+    macd_d=sigs["macd"]["detail"]
+    if "金叉" in macd_d:
+        if "柱扩大" in macd_d: lines.append(f"  • MACD 金叉且动能扩大 — 上涨加速中，短线势头正猛")
+        else: lines.append(f"  • MACD 金叉 — 上涨趋势刚开始，像汽车刚挂上档起步")
+    elif "死叉" in macd_d: lines.append(f"  • MACD 死叉 — 短期动能在减弱，像汽车在减速，注意刹车")
+    ma_d=sigs["ma"]["detail"]
+    if "Price>MA20>MA50" in ma_d: lines.append(f"  • 均线多头排列 — 短期在长期上方，趋势向好，像爬楼梯一阶比一阶高")
+    elif "空头" in ma_d: lines.append(f"  • 均线空头排列 — 价格低于均线，趋势偏弱，像下楼梯")
+    vol_d=sigs["volume"]["detail"]
+    if "放量" in vol_d and "上涨" in vol_d: lines.append(f"  • 成交量放大且上涨 — 真金白银在买，不是虚涨，可信度高")
+    elif "放量" in vol_d and "下跌" in vol_d: lines.append(f"  • 放量下跌 — 有大资金在出货，不是普通调整，要小心")
+    bb_d=sigs["bollinger"]["detail"]
+    if "扩张+近上轨" in bb_d: lines.append(f"  • 布林带扩张+近上轨 — 突破行情，波动加大，可能进入主升浪")
+    elif "扩张+近下轨" in bb_d: lines.append(f"  • 布林带扩张+近下轨 — 破位风险，波动加大但方向向下")
+    elif "收缩" in bb_d: lines.append(f"  • 布林带收缩 — 暴风雨前的宁静，盘整蓄力中，即将选择方向")
+    vs=rs.get("vs_qqq"); rs5=rs.get("rs_5d")
+    if vs=="outperform" and rs5 is not None: lines.append(f"  • 近5日跑赢纳斯达克 {rs5:+.1f}% — 比大盘更强，资金在流向这只票")
+    elif vs=="underperform" and rs5 is not None: lines.append(f"  • 近5日跑输纳斯达克 {rs5:+.1f}% — 比大盘更弱，资金在流出")
+    up=analyst.get("upside_pct"); rating=analyst.get("analyst_rating","N/A")
     if up is not None:
-        if up>20: lines.append(f"分析师目标价高出当前{up:.0f}%，机构认为长期有较大上涨空间")
-        elif up<-10: lines.append(f"分析师目标价低于当前{abs(up):.0f}%，机构认为当前估值偏高")
-    return "  💬 ".join(lines)
+        if up>20: lines.append(f"  • 分析师目标价上行{up:+.1f}%({rating}) — 专业人士认为严重低估")
+        elif up>5: lines.append(f"  • 分析师目标价上行{up:+.1f}%({rating}) — 专业人士认为有上涨空间")
+        elif up>0: lines.append(f"  • 分析师目标价上行{up:+.1f}%({rating}) — 接近合理估值")
+        else: lines.append(f"  • 分析师目标价下行{up:+.1f}%({rating}) — 专业人士认为当前偏贵")
+    lines.append("")
+    d=bias.get("direction","neutral"); c=bias.get("confidence","medium")
+    if d=="bullish" and c=="high": lines.append(f"  ✅ 综合判断：多个信号一致看多，短线机会明确。")
+    elif d=="bullish": lines.append(f"  📈 综合判断：偏多但信号有分歧，可小仓位试，设好止损。")
+    elif d=="bearish" and c=="high": lines.append(f"  ⚠️ 综合判断：多个信号一致看空，短线不宜参与，等信号反转。")
+    elif d=="bearish": lines.append(f"  📉 综合判断：偏空但非极端，已持有可考虑减仓，未持有先观望。")
+    else: lines.append(f"  ⚪ 综合判断：方向不明朗，多看少动，等信号清晰了再出手。")
+    if mpc and mpc.get("level") in ("high","extreme"):
+        lines.append(f"  🔴 注意：当前市场恐慌度较高，即使看多的标的也要控制仓位、设紧止损。")
+    return "\n".join(lines)
 
 def detect_signals(mpc,stocks,df_daily):
     sigs=[]; nonb=[s for s in stocks if s["ticker"] not in ("SPY","QQQ")]; mc=mpc.get("mpc_change")
@@ -282,7 +288,7 @@ def generate_summary(rd,mpc,stocks,sigs,rec):
         if bb_w is not None: raw_parts.append(f"布林带宽 {bb_w:.4f}")
         if ma20 and ma50: raw_parts.append(f"MA20 {ma20:.1f}/MA50 {ma50:.1f}")
         if raw_parts: L.append(f"  `{' | '.join(raw_parts)}`")
-        L.append(f"  💬 {generate_plain_explanation(s)}")
+        L.append(generate_plain_explanation(s, mpc))
     L.append(f"\n⛔ **建议:** {rec}")
     return "\n".join(L)
 
