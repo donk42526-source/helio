@@ -1,0 +1,9 @@
+TICKERS = ["NVDA","AMD","AVGO","TSM","MU","ASML","SMCI","MSFT","SPY","QQQ"]
+MPC_VIX_WEIGHT = 0.55
+MPC_FNG_WEIGHT = 0.45
+STS_WEIGHTS = {"ma":0.30,"rsi":0.25,"macd":0.20,"volume":0.15,"bollinger":0.10}
+YFINANCE_VIX_TICKER = "^VIX"
+CNN_FNG_URL = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+FETCH_RETRY_COUNT = 3
+FETCH_RETRY_DELAYS = [5,15,30]
+CHANNEL_NAME = "#data"
