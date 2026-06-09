@@ -196,6 +196,8 @@ def generate_prediction(stock):
         if rsi_v>70: lines.append(f"  • ⚠️ RSI超买({rsi_v:.1f})，短期可能技术性回调，追高需谨慎")
         elif rsi_v<30: lines.append(f"  • ⚡ RSI超卖({rsi_v:.1f})，恐慌抛售往往不可持续，关注企稳反弹信号")
     return "\n".join(lines)
+
+def generate_plain_explanation(stock, mpc=None):
     """通俗白话解释，给不懂金融的人看"""
     t=stock["ticker"]; sigs=stock["signals"]; bias=stock.get("bias",{})
     rs=stock.get("relative_strength",{}); analyst=stock.get("analyst",{})
