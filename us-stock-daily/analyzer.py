@@ -93,7 +93,7 @@ def score_bollinger(c,u,l,m,bw,pbw):
 
 WEIGHTS={"ma":0.30,"rsi":0.25,"macd":0.20,"volume":0.15,"bollinger":0.10}
 
-def compute_sts_one(t,c,ma20,ma50,vol,avol,chg,hist):
+def compute_sts_one(t,c,ma20,ma50,vol,avol,chg,hist,target_price=None,recommendation=None):
     rv=compute_rsi(hist); ml,ms,mh,mph=compute_macd(hist); bm,bu,bl,bw,bpw=compute_bollinger(hist)
     sc={}; sc["ma"],md=score_ma(c,ma20,ma50); sc["rsi"],rv2=score_rsi(rv)
     sc["macd"],mcd=score_macd(ml,ms,mh,mph); sc["volume"],vd=score_volume(vol,avol,chg)
@@ -101,10 +101,62 @@ def compute_sts_one(t,c,ma20,ma50,vol,avol,chg,hist):
     vw=sum(w for k,w in WEIGHTS.items() if not pd.isna(sc[k]))
     sts=sum(sc[k]*WEIGHTS[k]/vw for k in WEIGHTS if not pd.isna(sc[k])) if vw else 50; sts=round(sts,1)
     lv="strong" if sts>=70 else "bullish" if sts>=55 else "neutral" if sts>=40 else "weak" if sts>=25 else "bearish"
-    return {"ticker":t,"sts":sts,"level":lv,
-            "signals":{"ma":{"score":sc["ma"],"detail":md},"rsi":{"score":sc["rsi"],"value":round(rv2,1) if rv2 else None},
-                       "macd":{"score":sc["macd"],"detail":mcd},"volume":{"score":sc["volume"],"detail":vd},
-                       "bollinger":{"score":sc["bollinger"],"detail":bd}},"alerts":[]}
+    signals_out={"ma":{"score":sc["ma"],"detail":md},"rsi":{"score":sc["rsi"],"value":round(rv2,1) if rv2 else None},
+                 "macd":{"score":sc["macd"],"detail":mcd},"volume":{"score":sc["volume"],"detail":vd},
+                 "bollinger":{"score":sc["bollinger"],"detail":bd}}
+    bias=compute_bias(signals_out)
+    rs={"rs_5d":None,"rs_20d":None,"vs_qqq":None}
+    analyst=score_target_price(c,target_price,recommendation)
+    return {"ticker":t,"sts":sts,"level":lv,"signals":signals_out,"bias":bias,
+            "relative_strength":rs,"analyst":analyst,"alerts":[]}
+
+def compute_bias(signals):
+    votes={"bull":0,"bear":0}
+    if signals["ma"]["score"]>=70: votes["bull"]+=1
+    elif signals["ma"]["score"]<=40: votes["bear"]+=1
+    rv=signals["rsi"].get("value")
+    if rv is not None:
+        if 55<=rv<=75: votes["bull"]+=1
+        elif rv<40: votes["bear"]+=1
+    if signals["macd"]["score"]>=70: votes["bull"]+=1
+    elif signals["macd"]["score"]<=30: votes["bear"]+=1
+    if signals["volume"]["score"]>=70: votes["bull"]+=1
+    elif signals["volume"]["score"]<=30: votes["bear"]+=1
+    if signals["bollinger"]["score"]>=70: votes["bull"]+=1
+    elif signals["bollinger"]["score"]<=30: votes["bear"]+=1
+    direction="bullish" if votes["bull"]>=3 else "bearish" if votes["bear"]>=3 else "neutral"
+    tv=votes["bull"]+votes["bear"]
+    confidence="high" if tv>=4 and abs(votes["bull"]-votes["bear"])>=3 else "medium" if tv>=3 else "low"
+    return {"direction":direction,"confidence":confidence,"votes":votes}
+
+def score_target_price(close,tp,rec=None):
+    if tp is None or pd.isna(tp) or tp<=0:
+        return {"target_price":None,"upside_pct":None,"analyst_score":50,"analyst_rating":"N/A"}
+    up=round((tp/close-1)*100,1)
+    sc=85 if up>20 else 70 if up>10 else 60 if up>5 else 50 if up>0 else 40 if up>-5 else 30 if up>-10 else 15
+    rm={"strong_buy":"强力买入","buy":"买入","hold":"持有","sell":"卖出","strong_sell":"强力卖出"}
+    return {"target_price":round(tp,2),"upside_pct":up,"analyst_score":sc,"analyst_rating":rm.get(rec,"N/A")}
+
+def generate_ticker_analysis(stock):
+    t,sts=stock["ticker"],stock["sts"]; b=stock.get("bias",{}); rs=stock.get("relative_strength",{})
+    a=stock.get("analyst",{}); d,c=b.get("direction","neutral"),b.get("confidence","medium")
+    parts=[]
+    if d=="bullish": parts.append(f"{'🔥' if c=='high' else '📈'} 短线偏多"+("(高置信)" if c=="high" else ""))
+    elif d=="bearish": parts.append(f"{'⚠️' if c=='high' else '📉'} 短线偏空"+("(高置信)" if c=="high" else ""))
+    else: parts.append("⚪ 方向不明")
+    sd=[]; md=stock["signals"]["ma"]["detail"]; mcd=stock["signals"]["macd"]["detail"]
+    if "MA20>MA50" in md: sd.append("多头排列")
+    elif "空头" in md: sd.append("空头排列")
+    if "金叉" in mcd: sd.append("MACD金叉")
+    elif "死叉" in mcd: sd.append("MACD死叉")
+    if sd: parts.append("，"+",".join(sd))
+    vs=rs.get("vs_qqq"); rs5=rs.get("rs_5d")
+    if vs and rs5 is not None:
+        if vs=="outperform": parts.append(f"，跑赢QQQ {rs5:+.1f}%")
+        elif vs=="underperform": parts.append(f"，跑输QQQ {rs5:+.1f}%")
+    up=a.get("upside_pct")
+    if up is not None: parts.append(f"，目标价上行{up:+.1f}%")
+    return f"**{t}** (STS {sts}): "+"".join(parts)
 
 def detect_signals(mpc,stocks,df_daily):
     sigs=[]; nonb=[s for s in stocks if s["ticker"] not in ("SPY","QQQ")]; mc=mpc.get("mpc_change")
@@ -171,17 +223,34 @@ def generate_summary(rd,mpc,stocks,sigs,rec):
         L.append("")
     spy=next((s for s in stocks if s["ticker"]=="SPY"),None); qqq=next((s for s in stocks if s["ticker"]=="QQQ"),None)
     if spy and qqq: L.append(f"📉 **大盘基准**: SPY {spy['sts']} | QQQ {qqq['sts']}")
+    L.append("")
+    sb=[s for s in stocks if s["ticker"] not in ("SPY","QQQ")]
+    sb_sorted=sorted(sb,key=lambda x: x["sts"],reverse=True)
+    L.append("📋 **逐标的方向研判:**")
+    for s in sb_sorted:
+        L.append(generate_ticker_analysis(s))
     L.append(f"\n⛔ **建议:** {rec}")
     return "\n".join(L)
 
 def run_analysis(df_daily, df_history, vix, fng, prev_mpc=None):
     if "avg_volume" not in df_daily.columns:
         df_daily=df_daily.copy(); df_daily["avg_volume"]=df_daily["volume"]
-    mpc=compute_mpc(vix,fng,prev_mpc); stocks=[]
+    mpc=compute_mpc(vix,fng,prev_mpc)
+    # find QQQ for relative strength baseline
+    qqq_row=df_daily[df_daily["ticker"]=="QQQ"]
+    qqq_close=float(qqq_row["close"].iloc[0]) if len(qqq_row) else None
+    qqq_hist=df_history["QQQ"].dropna().values if "QQQ" in df_history.columns else np.array([])
+    stocks=[]
     for _,row in df_daily.iterrows():
         t=row["ticker"]; hist=df_history[t].dropna().values if t in df_history.columns else np.array([row["close"]]*30)
         s=compute_sts_one(t,row["close"],row.get("ma20",np.nan),row.get("ma50",np.nan),
-                          row["volume"],row["avg_volume"],row.get("change_pct",0),hist)
+                          row["volume"],row["avg_volume"],row.get("change_pct",0),hist,
+                          row.get("target_price"),row.get("recommendation"))
+        # fill relative strength
+        if qqq_close and len(qqq_hist)>=5 and len(hist)>=5:
+            rs5=round((row["close"]/hist[-5]-1)*100-(qqq_close/qqq_hist[-5]-1)*100,2)
+            s["relative_strength"]["rs_5d"]=rs5
+            s["relative_strength"]["vs_qqq"]="outperform" if rs5>2 else "underperform" if rs5<-2 else "in_line"
         stocks.append(s)
     sigs=detect_signals(mpc,stocks,df_daily); rec=recommend(mpc,sigs)
     today_str=date.today().isoformat(); summary=generate_summary(today_str,mpc,stocks,sigs,rec)
